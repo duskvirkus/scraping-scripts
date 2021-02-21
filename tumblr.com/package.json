@@ -1,0 +1,11 @@
+{
+  "name": "tumblr.com",
+  "version": "0.0.1",
+  "description": "scraping for tumblr.com",
+  "main": "tumblr-scrape.js",
+  "author": "Dusk Graham",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^7.1.0"
+  }
+}
