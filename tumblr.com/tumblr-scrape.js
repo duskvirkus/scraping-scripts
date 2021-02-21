@@ -13,9 +13,19 @@ let saveFolder;
 let browserWidth;
 let browserHeight;
 
-(async () => {
+let browser;
+let page;
 
-  // handle arguments
+(async () => {
+  console.log('Starting!');
+  handleArguments();
+  makeDirectories();
+  await setup();
+  await scrapePages();
+  console.log('Done 🎉🎉🎉');
+})();
+
+function handleArguments() {
   if (process.argv.length <= 2 || process.argv > 4) {
     console.log('Invalid number of arguments! Please look at README.md for more info on usage.');
     process.exit(1);
@@ -48,8 +58,9 @@ let browserHeight;
       // console.log(pagesFlag, pagesNum);
     }
   }
+}
 
-
+function makeDirectories() {
   // make directories
   if (!fs.existsSync('./images')){
     fs.mkdirSync('./images');
@@ -59,51 +70,58 @@ let browserHeight;
   if (!fs.existsSync(saveFolder)) {
     fs.mkdirSync(saveFolder);
   }
+}
 
-  robot.setMouseDelay(2);
-  const screenSize = robot.getScreenSize();
-  browserWidth = 1280 > screenSize.width ? screenSize.width : 1280;
-  browserHeight = 720 > screenSize.height ? screenSize.height : 720;
+function setup() {
+  return new Promise(async(resolve) => {
+    robot.setMouseDelay(2);
+    const screenSize = robot.getScreenSize();
+    browserWidth = 1280 > screenSize.width ? screenSize.width : 1280;
+    browserHeight = 720 > screenSize.height ? screenSize.height : 720;
+  
+    browser = await puppeteer.launch({
+      headless: false,
+      args: [
+        '--window-position=0,0',
+        `--window-size=${browserWidth},${browserHeight}`
+      ],
+    });
+    page = await browser.newPage();
+    await page.setViewport({
+      width: browserWidth,
+      height: browserHeight,
+    });
 
-  const browser = await puppeteer.launch({
-    headless: false,
-    args: [
-      '--window-position=0,0',
-      `--window-size=${browserWidth},${browserHeight}`
-    ],
+    resolve();
   });
-  const page = await browser.newPage();
-  await page.setViewport({
-    width: browserWidth,
-    height: browserHeight,
+}
+
+function scrapePages() {
+  return new Promise(async(resolve) => {
+    let currentPageNum = 1;
+    do {
+  
+      const url = urlArg + slashNeeded(urlArg) + 'page/' + currentPageNum;
+      await page.goto(url);
+  
+      let imgURLs = await getImageURLs(page);
+      imgURLs = imgURLs.filter(e => e != null);
+      if (imgURLs.length <= 1) {
+        pagesFlag = false;
+      } else {
+        await downloadImages(imgURLs, page);
+      }
+  
+      currentPageNum++;
+      if (currentPageNum > pagesNum && pagesNum != -1) {
+        pagesFlag = false;
+      }
+    } while(pagesFlag);
+  
+    await page.close();
+    await browser.close();
   });
-  let currentPageNum = 1;
-
-  do {
-
-    const url = urlArg + slashNeeded(urlArg) + 'page/' + currentPageNum;
-    await page.goto(url);
-
-    let imgURLs = await getImageURLs(page);
-    imgURLs = imgURLs.filter(e => e != null);
-    if (imgURLs.length <= 1) {
-      pagesFlag = false;
-    } else {
-      await downloadImages(imgURLs, page);
-    }
-
-    currentPageNum++;
-    if (currentPageNum > pagesNum && pagesNum != -1) {
-      pagesFlag = false;
-    }
-  } while(pagesFlag);
-
-  await page.close();
-  await browser.close();
-
-  console.log('Done 🎉🎉🎉');
-
-})();
+}
 
 async function getImageURLs(page) {
   return await page.evaluate((selector) => {
@@ -158,6 +176,7 @@ function slashNeeded(a) {
 
 async function gifDownload(gifName) {
   return new Promise(async(resolve) => {
+    gifName = gifName.replace(/_/g, '-'); // who knows why but underscores don't work
     if (fs.existsSync(saveFolder + '/' + gifName + '.gif')) {
       resolve();
     } else {
@@ -168,7 +187,7 @@ async function gifDownload(gifName) {
       robot.keyTap('down');
       robot.keyTap('down');
       robot.keyTap('enter');
-      robot.typeString('---' + gifName);
+      robot.typeString('-----' + gifName);
       robot.keyTap('enter');
       robot.keyTap('enter');
 
@@ -176,12 +195,13 @@ async function gifDownload(gifName) {
 
       let gifDownloaded = false;
       while(!gifDownloaded) {
-        for (let i = 0; i < 4; ++i) {
+        for (let i = 0; i < 6; ++i) {
           let add = '';
           for (let j = 0; j < i; ++j) {
             add += '-';
           }
           const checkPath = downloadPath + add + gifName + '.gif';
+          // console.log(checkPath);
           if (fs.existsSync(checkPath)) {
             downloadPath = checkPath;
             gifDownloaded = true;
@@ -189,6 +209,7 @@ async function gifDownload(gifName) {
           }
         }
 
+        // console.log('Waiting for image to download...');
         await sleep(500);
       }
 

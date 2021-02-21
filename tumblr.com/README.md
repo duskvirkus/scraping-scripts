@@ -5,6 +5,8 @@ Last updated on Feb 20th 2021.
 **Required tools:**
 
 - node.js
+- chromium (will install automatically if not already installed)
+- ability to compile a npm c++ package (will happen automatically on most computers)
 
 ## How to Use
 
@@ -18,7 +20,8 @@ You can optionally pass a pages argument to the script after the url. This can e
 
 ## Limitations
 
-Currently doesn't support scraping gifs. It may stop prematurely if blog is full of lots of text posts because it'll stop if It can't find any images on a page if using the auto calculate pages feature.
+- Don't use your mouse or keyboard while running the script because these are required for downloading gifs.
+- It may stop prematurely if blog is full of lots of text posts because it'll stop if It can't find any images on a page if using the auto calculate pages feature.
 
 ## Example
 
