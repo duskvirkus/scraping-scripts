@@ -2,12 +2,16 @@
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const robot = require('robotjs');
+const { resolve } = require('path');
 
 let urlArg;
 let pagesFlag = false;
 let pagesNum = -1;
 
 let saveFolder;
+let browserWidth;
+let browserHeight;
 
 (async () => {
 
@@ -56,8 +60,23 @@ let saveFolder;
     fs.mkdirSync(saveFolder);
   }
 
-  const browser = await puppeteer.launch({headless: false});
+  robot.setMouseDelay(2);
+  const screenSize = robot.getScreenSize();
+  browserWidth = 1280 > screenSize.width ? screenSize.width : 1280;
+  browserHeight = 720 > screenSize.height ? screenSize.height : 720;
+
+  const browser = await puppeteer.launch({
+    headless: false,
+    args: [
+      '--window-position=0,0',
+      `--window-size=${browserWidth},${browserHeight}`
+    ],
+  });
   const page = await browser.newPage();
+  await page.setViewport({
+    width: browserWidth,
+    height: browserHeight,
+  });
   let currentPageNum = 1;
 
   do {
@@ -110,16 +129,20 @@ async function downloadImages(urls, page) {
     const imgType = urlParts1[urlParts1.length - 1];
 
     if (imgType === 'jpg' || imgType ===  'png') {
-      fs.writeFileSync(
-        saveFolder + '/' + imgName,
-        await source.buffer(),
-        err => {
-          if (err) {
-            console.error(err);
+      if (!fs.existsSync(saveFolder + '/' + imgName)) {
+        fs.writeFileSync(
+          saveFolder + '/' + imgName,
+          await source.buffer(),
+          err => {
+            if (err) {
+              console.error(err);
+            }
           }
-        }
-      );
-    // } else if (imgType === 'gifv') {
+        );
+      }
+    } else if (imgType === 'gifv') {
+      const gifName = imgName.split('.')[0];
+      await gifDownload(gifName);
     } else {
       console.log(`⚠️ Warning: Unsupported image type '${imgType}'. Skipping '${urls[i]}'`);
     }
@@ -131,4 +154,54 @@ function slashNeeded(a) {
     return '/';
   }
   return '';
+}
+
+async function gifDownload(gifName) {
+  return new Promise(async(resolve) => {
+    if (fs.existsSync(saveFolder + '/' + gifName + '.gif')) {
+      resolve();
+    } else {
+      robot.moveMouse(browserWidth / 2, browserHeight / 2);
+      robot.mouseClick('right');
+
+      robot.keyTap('down');
+      robot.keyTap('down');
+      robot.keyTap('down');
+      robot.keyTap('enter');
+      robot.typeString('---' + gifName);
+      robot.keyTap('enter');
+      robot.keyTap('enter');
+
+      let downloadPath = '/home/violet/Downloads/';
+
+      let gifDownloaded = false;
+      while(!gifDownloaded) {
+        for (let i = 0; i < 4; ++i) {
+          let add = '';
+          for (let j = 0; j < i; ++j) {
+            add += '-';
+          }
+          const checkPath = downloadPath + add + gifName + '.gif';
+          if (fs.existsSync(checkPath)) {
+            downloadPath = checkPath;
+            gifDownloaded = true;
+            break;
+          }
+        }
+
+        await sleep(500);
+      }
+
+      fs.copyFileSync(downloadPath, saveFolder + '/' + gifName + '.gif');
+      fs.unlinkSync(downloadPath);
+
+      resolve();
+    }
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

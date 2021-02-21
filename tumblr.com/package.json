@@ -6,6 +6,7 @@
   "author": "Dusk Graham",
   "license": "MIT",
   "dependencies": {
-    "puppeteer": "^7.1.0"
+    "puppeteer": "^7.1.0",
+    "robotjs": "^0.6.0"
   }
 }
