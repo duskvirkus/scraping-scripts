@@ -1,6 +1,6 @@
 # tumblr.com scraping
 
-Last updated on Feb 20th 2021.
+Last updated on Feb 21th 2021.
 
 **Required tools:**
 
