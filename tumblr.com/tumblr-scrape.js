@@ -2,16 +2,30 @@
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const robot = require('robotjs');
+const { resolve } = require('path');
 
 let urlArg;
 let pagesFlag = false;
 let pagesNum = -1;
 
 let saveFolder;
+let browserWidth;
+let browserHeight;
+
+let browser;
+let page;
 
 (async () => {
+  console.log('Starting!');
+  handleArguments();
+  makeDirectories();
+  await setup();
+  await scrapePages();
+  console.log('Done 🎉🎉🎉');
+})();
 
-  // handle arguments
+function handleArguments() {
   if (process.argv.length <= 2 || process.argv > 4) {
     console.log('Invalid number of arguments! Please look at README.md for more info on usage.');
     process.exit(1);
@@ -44,8 +58,9 @@ let saveFolder;
       // console.log(pagesFlag, pagesNum);
     }
   }
+}
 
-
+function makeDirectories() {
   // make directories
   if (!fs.existsSync('./images')){
     fs.mkdirSync('./images');
@@ -55,36 +70,58 @@ let saveFolder;
   if (!fs.existsSync(saveFolder)) {
     fs.mkdirSync(saveFolder);
   }
+}
 
-  const browser = await puppeteer.launch({headless: false});
-  const page = await browser.newPage();
-  let currentPageNum = 1;
+function setup() {
+  return new Promise(async(resolve) => {
+    robot.setMouseDelay(2);
+    const screenSize = robot.getScreenSize();
+    browserWidth = 1280 > screenSize.width ? screenSize.width : 1280;
+    browserHeight = 720 > screenSize.height ? screenSize.height : 720;
+  
+    browser = await puppeteer.launch({
+      headless: false,
+      args: [
+        '--window-position=0,0',
+        `--window-size=${browserWidth},${browserHeight}`
+      ],
+    });
+    page = await browser.newPage();
+    await page.setViewport({
+      width: browserWidth,
+      height: browserHeight,
+    });
 
-  do {
+    resolve();
+  });
+}
 
-    const url = urlArg + slashNeeded(urlArg) + 'page/' + currentPageNum;
-    await page.goto(url);
-
-    let imgURLs = await getImageURLs(page);
-    imgURLs = imgURLs.filter(e => e != null);
-    if (imgURLs.length <= 1) {
-      pagesFlag = false;
-    } else {
-      await downloadImages(imgURLs, page);
-    }
-
-    currentPageNum++;
-    if (currentPageNum > pagesNum && pagesNum != -1) {
-      pagesFlag = false;
-    }
-  } while(pagesFlag);
-
-  await page.close();
-  await browser.close();
-
-  console.log('Done 🎉🎉🎉');
-
-})();
+function scrapePages() {
+  return new Promise(async(resolve) => {
+    let currentPageNum = 1;
+    do {
+  
+      const url = urlArg + slashNeeded(urlArg) + 'page/' + currentPageNum;
+      await page.goto(url);
+  
+      let imgURLs = await getImageURLs(page);
+      imgURLs = imgURLs.filter(e => e != null);
+      if (imgURLs.length <= 1) {
+        pagesFlag = false;
+      } else {
+        await downloadImages(imgURLs, page);
+      }
+  
+      currentPageNum++;
+      if (currentPageNum > pagesNum && pagesNum != -1) {
+        pagesFlag = false;
+      }
+    } while(pagesFlag);
+  
+    await page.close();
+    await browser.close();
+  });
+}
 
 async function getImageURLs(page) {
   return await page.evaluate((selector) => {
@@ -110,16 +147,20 @@ async function downloadImages(urls, page) {
     const imgType = urlParts1[urlParts1.length - 1];
 
     if (imgType === 'jpg' || imgType ===  'png') {
-      fs.writeFileSync(
-        saveFolder + '/' + imgName,
-        await source.buffer(),
-        err => {
-          if (err) {
-            console.error(err);
+      if (!fs.existsSync(saveFolder + '/' + imgName)) {
+        fs.writeFileSync(
+          saveFolder + '/' + imgName,
+          await source.buffer(),
+          err => {
+            if (err) {
+              console.error(err);
+            }
           }
-        }
-      );
-    // } else if (imgType === 'gifv') {
+        );
+      }
+    } else if (imgType === 'gifv') {
+      const gifName = imgName.split('.')[0];
+      await gifDownload(gifName);
     } else {
       console.log(`⚠️ Warning: Unsupported image type '${imgType}'. Skipping '${urls[i]}'`);
     }
@@ -131,4 +172,57 @@ function slashNeeded(a) {
     return '/';
   }
   return '';
+}
+
+async function gifDownload(gifName) {
+  return new Promise(async(resolve) => {
+    gifName = gifName.replace(/_/g, '-'); // who knows why but underscores don't work
+    if (fs.existsSync(saveFolder + '/' + gifName + '.gif')) {
+      resolve();
+    } else {
+      robot.moveMouse(browserWidth / 2, browserHeight / 2);
+      robot.mouseClick('right');
+
+      robot.keyTap('down');
+      robot.keyTap('down');
+      robot.keyTap('down');
+      robot.keyTap('enter');
+      robot.typeString('-----' + gifName);
+      robot.keyTap('enter');
+      robot.keyTap('enter');
+
+      let downloadPath = '/home/violet/Downloads/';
+
+      let gifDownloaded = false;
+      while(!gifDownloaded) {
+        for (let i = 0; i < 6; ++i) {
+          let add = '';
+          for (let j = 0; j < i; ++j) {
+            add += '-';
+          }
+          const checkPath = downloadPath + add + gifName + '.gif';
+          // console.log(checkPath);
+          if (fs.existsSync(checkPath)) {
+            downloadPath = checkPath;
+            gifDownloaded = true;
+            break;
+          }
+        }
+
+        // console.log('Waiting for image to download...');
+        await sleep(500);
+      }
+
+      fs.copyFileSync(downloadPath, saveFolder + '/' + gifName + '.gif');
+      fs.unlinkSync(downloadPath);
+
+      resolve();
+    }
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
